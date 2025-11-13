@@ -35,7 +35,8 @@ class Settings(BaseSettings):
     FINNHUB_API_KEY: Optional[str] = None
     
     # Proxy settings for rate limiting
-    PROXY_SERVER: Optional[str] = None
+    PROXY_SERVER: Optional[str] = None  # Single proxy (backward compatible)
+    PROXY_SERVERS: Optional[str] = None  # Comma-separated list of proxies for rotation
     
     @model_validator(mode='after')
     def parse_cors_origins(self):

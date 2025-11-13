@@ -53,7 +53,7 @@ def safe_get_sync(url: str, params: Optional[Dict] = None, retries: int = 2) -> 
 async def get_all_finnhub_data(symbol: str) -> Optional[Dict]:
     """
     Fetch ALL available data from Finnhub API for a given symbol.
-    Returns complete data structure with all endpoints.
+    Returns data directly with API response keys (Company Profile, Basic Financials, etc.)
     """
     if not FINNHUB_API_KEY:
         print("❌ FINNHUB_API_KEY not configured in settings.")
@@ -205,7 +205,7 @@ async def get_all_finnhub_data(symbol: str) -> Optional[Dict]:
     if earnings_calendar and not isinstance(earnings_calendar, Exception):
         all_data["Earnings Calendar"] = earnings_calendar
 
-    # Add metadata
+    # Add metadata (optional, can be used for debugging)
     all_data["_metadata"] = {
         "symbol": symbol,
         "fetched_at": datetime.now().isoformat(),
@@ -213,25 +213,7 @@ async def get_all_finnhub_data(symbol: str) -> Optional[Dict]:
         "api_source": "Finnhub"
     }
 
-    # Build profile structure - put ALL Finnhub data in "What" section (like Polygon)
-    profile = {}
-    
-    # ========== WHAT: ALL COMPLETE FINNHUB DATA ==========
-    # Put all complete data from Finnhub in "What" section
-    profile["What"] = all_data  # Complete Finnhub data structure
-    
-    # Keep other sections minimal or empty for Finnhub
-    profile["When"] = {}
-    profile["Where"] = {}
-    profile["How"] = {}
-    profile["Who"] = {}
-    profile["Why It Matters"] = {}
-    profile["Sources"] = {
-        "Finnhub": {
-            "Complete Data": True,
-            "Data Sections": list(all_data.keys()),
-        }
-    }
-    
-    return profile if all_data else None
+    # Return data directly without wrapping in "What" and "Sources"
+    # This allows the frontend to create dynamic buttons from the actual API response keys
+    return all_data if all_data else None
 

@@ -110,31 +110,19 @@ export const fetchYahooFinanceDirect = async (ticker) => {
     
     console.log(`🔍 [YFINANCE] Company Profile keys:`, Object.keys(companyProfileData))
     
-    // Structure the data similar to backend format
-    const profileData = {
-      What: companyProfileData,  // Put all data in What section
-      When: {},
-      Where: {},
-      How: {},
-      Who: {},
-      'Why It Matters': {},
-      Sources: {
-        'Yahoo Finance (Direct)': {
-          'Complete Data': true,
-          'Data Sections': Object.keys(companyProfileData),
-          'Fetched At': new Date().toISOString()
-        }
-      }
+    // Return data directly without wrapping in "What" and "Sources"
+    // This allows the frontend to create dynamic buttons from the actual API response keys
+    // Remove the duplicate "Company Profile" key if it exists (keep individual modules)
+    if (companyProfileData['Company Profile']) {
+      // Keep individual modules, remove the duplicate wrapper
+      delete companyProfileData['Company Profile']
     }
     
-    console.log(`🔍 [YFINANCE] Profile data structure:`, {
-      'What keys': Object.keys(profileData.What),
-      'What.Company Profile keys': profileData.What['Company Profile'] ? Object.keys(profileData.What['Company Profile']) : 'N/A'
-    })
+    console.log(`🔍 [YFINANCE] Final data structure keys:`, Object.keys(companyProfileData))
     
     return {
       ticker: ticker.toUpperCase(),
-      data: profileData,
+      data: companyProfileData,  // Return directly without wrapper
       success: true
     }
   } catch (error) {

@@ -3,6 +3,9 @@ import pandas as pd
 import json
 import os
 import warnings
+import shutil
+import platform
+from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -14,6 +17,64 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 load_dotenv()
 
 VERBOSE = (os.getenv("VERBOSE", "false") or "false").lower() in ("1", "true", "yes", "y")
+
+
+def clear_yfinance_cache():
+    """Clear yfinance cache to reset session and avoid rate limiting"""
+    try:
+        # Get yfinance cache location based on OS
+        system = platform.system()
+        user_home = Path.home()
+        
+        if system == "Windows":
+            cache_dir = user_home / "AppData" / "Local" / "py-yfinance"
+        elif system == "Linux":
+            cache_dir = user_home / ".cache" / "py-yfinance"
+        elif system == "Darwin":  # macOS
+            cache_dir = user_home / "Library" / "Caches" / "py-yfinance"
+        else:
+            print(f"⚠️ [CACHE] Unknown OS: {system}, cannot determine cache location")
+            return False
+        
+        # Check if cache directory exists
+        if cache_dir.exists() and cache_dir.is_dir():
+            print(f"🧹 [CACHE] Found yfinance cache at: {cache_dir}")
+            
+            # Count files before deletion
+            file_count = sum(1 for _ in cache_dir.rglob('*') if _.is_file())
+            print(f"🧹 [CACHE] Found {file_count} cache files")
+            
+            # Delete cache directory
+            shutil.rmtree(cache_dir)
+            print(f"✅ [CACHE] Successfully cleared yfinance cache ({file_count} files)")
+            return True
+        else:
+            print(f"ℹ️ [CACHE] No cache found at: {cache_dir}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ [CACHE] Error clearing yfinance cache: {e}")
+        return False
+
+
+def clear_yfinance_session():
+    """Clear yfinance session by creating fresh ticker instances"""
+    try:
+        # Clear any module-level caches
+        import yfinance.base as yf_base
+        import yfinance.scrapers.quote as yf_quote
+        
+        # Clear session if it exists
+        if hasattr(yf_base, '_session'):
+            yf_base._session = None
+        if hasattr(yf_quote, '_session'):
+            yf_quote._session = None
+            
+        print(f"✅ [SESSION] Cleared yfinance session")
+        return True
+    except Exception as e:
+        print(f"⚠️ [SESSION] Could not clear session: {e}")
+        return False
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -661,6 +722,23 @@ async def health_check():
     return {"status": "healthy", "service": "Yahoo Finance API"}
 
 
+@app.post("/api/v1/clear-cache")
+async def api_clear_cache():
+    """Clear yfinance cache to reset session and avoid rate limiting"""
+    try:
+        cache_cleared = clear_yfinance_cache()
+        session_cleared = clear_yfinance_session()
+        
+        return {
+            "status": "success",
+            "cache_cleared": cache_cleared,
+            "session_cleared": session_cleared,
+            "message": "yfinance cache and session cleared successfully"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error clearing cache: {str(e)}")
+
+
 @app.get("/api/v1/company-profile/{symbol}")
 async def api_company_profile(symbol: str):
     """Get company profile/overview for a stock symbol"""
@@ -813,10 +891,11 @@ async def api_company_identity(symbol: str):
 
 if __name__ == "__main__":
     import uvicorn
+    # Use app directly instead of string to avoid module import issues
     uvicorn.run(
-        "yahooFinanceAPI:app",
+        app,
         host="0.0.0.0",
         port=8000,
-        reload=True
+        reload=False  # Set to False when using app object directly
     )
 

@@ -1,12 +1,33 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import SectionCard from './SectionCard'
 import { fetchFundamentalsFromGemini, fetchProfileFromYFinance, fetchProfileFromGemini, fetchProfileFromPolygon, fetchDataFromFinnhub } from '../services/api'
-import { fetchYahooFinanceDirect } from '../services/yahooFinance'
 
 function CompanyProfile({ data, ticker, onDataUpdate }) {
-  const [activeDataSource, setActiveDataSource] = useState('Gemini') // Gemini, YahooFinance, Polygon, Finnhub
+  const [activeDataSource, setActiveDataSource] = useState('Profile') // Profile, Gemini, YahooFinance, Polygon, Finnhub
   const [activeMainSection, setActiveMainSection] = useState('Identity')
   const [activeSubSection, setActiveSubSection] = useState('What')
+  const lastLoadedTicker = useRef(null) // Track which ticker we last loaded sections for
+  
+  // Get localStorage key for this ticker
+  const getStorageKey = (tickerValue) => `profileSections_${tickerValue?.toUpperCase() || 'default'}`
+  
+  // Load profile sections from localStorage
+  const loadProfileSections = (tickerValue) => {
+    if (!tickerValue) return []
+    try {
+      const stored = localStorage.getItem(getStorageKey(tickerValue))
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        return Array.isArray(parsed) ? parsed : []
+      }
+    } catch (error) {
+      console.error('Error loading profile sections from localStorage:', error)
+    }
+    return []
+  }
+  
+  const [profileSections, setProfileSections] = useState(() => loadProfileSections(ticker)) // Custom sections for Profile tab
+  const [showAddSectionModal, setShowAddSectionModal] = useState(false)
   const [fundamentalsLoading, setFundamentalsLoading] = useState(false)
   const [fundamentalsStatus, setFundamentalsStatus] = useState('')
   const [fundamentalsError, setFundamentalsError] = useState(null)
@@ -34,15 +55,200 @@ function CompanyProfile({ data, ticker, onDataUpdate }) {
     availableSources.push('Gemini')
   }
 
-  // Set default active source if current one doesn't exist
-  useEffect(() => {
-    if (!data?.[activeDataSource] && availableSources.length > 0) {
-      setActiveDataSource(availableSources[0])
-    }
-  }, [data, activeDataSource, availableSources])
-
   // Get current source data
   const currentSourceData = data?.[activeDataSource] || {}
+
+  // Get all available sections from all data sources for Profile tab
+  const getAllAvailableSections = () => {
+    const allSections = []
+    
+    // Get sections from each data source
+    const sources = ['Gemini', 'YahooFinance', 'Polygon', 'Finnhub']
+    
+    sources.forEach(source => {
+      const sourceData = data?.[source]
+      if (!sourceData || typeof sourceData !== 'object') return
+      
+      // Handle Polygon, Finnhub, YahooFinance - direct keys
+      if (source === 'Polygon' || source === 'Finnhub' || source === 'YahooFinance') {
+        let apiData = sourceData
+        if (sourceData.What && typeof sourceData.What === 'object') {
+          apiData = sourceData.What
+        }
+        
+        Object.keys(apiData).forEach(key => {
+          if (key === 'What' || key === 'Sources' || key === 'When' || key === 'Where' || 
+              key === 'How' || key === 'Who' || key === 'Why It Matters' || 
+              key === '_metadata' || key.startsWith('_')) {
+            return
+          }
+          
+          const value = apiData[key]
+          if (value !== null && value !== undefined && 
+              (typeof value !== 'object' || Object.keys(value).length > 0)) {
+            allSections.push({
+              source,
+              sectionKey: key,
+              label: `${source === 'YahooFinance' ? 'Yahoo Finance' : source}: ${key}`,
+              data: value
+            })
+          }
+        })
+      } else if (source === 'Gemini') {
+        // Handle Gemini - structured sections
+        const identitySubSections = ['What', 'When', 'Where', 'How', 'Who', 'Sources']
+        identitySubSections.forEach(subSection => {
+          const sectionData = sourceData[subSection]
+          if (sectionData && typeof sectionData === 'object' && Object.keys(sectionData).length > 0) {
+            allSections.push({
+              source,
+              sectionKey: `Identity.${subSection}`,
+              label: `${source}: Identity - ${subSection}`,
+              data: sectionData
+            })
+          }
+        })
+        
+        // Other Gemini sections
+        const otherSections = ['Ratings', 'News', 'Developments', 'Events', 'Catalyst', 'StockBehaviour', 'Stock Behaviour']
+        otherSections.forEach(sectionKey => {
+          const sectionData = sourceData[sectionKey] || sourceData[sectionKey.toLowerCase()]
+          if (sectionData && typeof sectionData === 'object' && Object.keys(sectionData).length > 0) {
+            allSections.push({
+              source,
+              sectionKey,
+              label: `${source}: ${sectionKey}`,
+              data: sectionData
+            })
+          }
+        })
+      }
+    })
+    
+    return allSections
+  }
+
+  // Save profile sections to localStorage whenever they change
+  useEffect(() => {
+    if (ticker && profileSections.length >= 0) {
+      try {
+        // Save only the metadata (source, sectionKey, label) not the full data
+        // We'll sync data when loading
+        const sectionsToSave = profileSections.map(s => ({
+          source: s.source,
+          sectionKey: s.sectionKey,
+          label: s.label
+        }))
+        localStorage.setItem(getStorageKey(ticker), JSON.stringify(sectionsToSave))
+      } catch (error) {
+        console.error('Error saving profile sections to localStorage:', error)
+      }
+    }
+  }, [profileSections, ticker])
+
+  // Load profile sections when ticker changes
+  useEffect(() => {
+    if (ticker && lastLoadedTicker.current !== ticker) {
+      lastLoadedTicker.current = ticker
+      const loaded = loadProfileSections(ticker)
+      if (loaded.length > 0) {
+        // Sync loaded sections with current data (keep sections even if data not available yet)
+        const syncedSections = loaded.map(savedSection => {
+          const sourceData = data?.[savedSection.source]
+          
+          // Get the actual data for this section
+          let sectionData = null
+          
+          if (sourceData) {
+            if (savedSection.source === 'Polygon' || savedSection.source === 'Finnhub' || savedSection.source === 'YahooFinance') {
+              let apiData = sourceData
+              if (sourceData.What && typeof sourceData.What === 'object') {
+                apiData = sourceData.What
+              }
+              sectionData = apiData[savedSection.sectionKey]
+            } else if (savedSection.source === 'Gemini') {
+              if (savedSection.sectionKey.startsWith('Identity.')) {
+                const subSection = savedSection.sectionKey.split('.')[1]
+                sectionData = sourceData[subSection]
+              } else {
+                sectionData = sourceData[savedSection.sectionKey] || sourceData[savedSection.sectionKey.toLowerCase()]
+              }
+            }
+          }
+          
+          // Return section with data if available, otherwise return section with empty data
+          return {
+            ...savedSection,
+            data: (sectionData && typeof sectionData === 'object' && Object.keys(sectionData).length > 0) ? sectionData : {}
+          }
+        })
+        
+        setProfileSections(syncedSections)
+      } else {
+        setProfileSections([])
+      }
+    } else if (!ticker) {
+      lastLoadedTicker.current = null
+      setProfileSections([])
+    }
+  }, [ticker]) // Only run when ticker changes
+
+  // Update section data when data changes (but keep the section list)
+  useEffect(() => {
+    if (ticker && profileSections.length > 0) {
+      setProfileSections(prevSections => {
+        return prevSections.map(savedSection => {
+          const sourceData = data?.[savedSection.source]
+          if (!sourceData) return savedSection // Keep section even if data not available yet
+          
+          // Get the actual data for this section
+          let sectionData = null
+          
+          if (savedSection.source === 'Polygon' || savedSection.source === 'Finnhub' || savedSection.source === 'YahooFinance') {
+            let apiData = sourceData
+            if (sourceData.What && typeof sourceData.What === 'object') {
+              apiData = sourceData.What
+            }
+            sectionData = apiData[savedSection.sectionKey]
+          } else if (savedSection.source === 'Gemini') {
+            if (savedSection.sectionKey.startsWith('Identity.')) {
+              const subSection = savedSection.sectionKey.split('.')[1]
+              sectionData = sourceData[subSection]
+            } else {
+              sectionData = sourceData[savedSection.sectionKey] || sourceData[savedSection.sectionKey.toLowerCase()]
+            }
+          }
+          
+          // Update data if available, otherwise keep existing
+          if (sectionData && typeof sectionData === 'object' && Object.keys(sectionData).length > 0) {
+            return {
+              ...savedSection,
+              data: sectionData
+            }
+          }
+          return savedSection // Keep section with existing data
+        })
+      })
+    }
+  }, [data]) // Update data when data changes
+
+  // Handle adding section to Profile tab
+  const handleAddSection = (section) => {
+    // Check if section already exists
+    const exists = profileSections.some(s => 
+      s.source === section.source && s.sectionKey === section.sectionKey
+    )
+    
+    if (!exists) {
+      setProfileSections([...profileSections, section])
+    }
+    setShowAddSectionModal(false)
+  }
+
+  // Handle removing section from Profile tab
+  const handleRemoveSection = (index) => {
+    setProfileSections(profileSections.filter((_, i) => i !== index))
+  }
 
   // Identity sub-sections (moved from top tabs)
   const identitySections = {
@@ -54,18 +260,225 @@ function CompanyProfile({ data, ticker, onDataUpdate }) {
     Sources: currentSourceData.Sources || {}
   }
 
-  // Main sections configuration
-  const sidebarSections = [
-    { key: 'Identity', label: 'Identity', hasSubSections: true },
+  // Helper function to check if a section has data
+  const hasSectionData = (sectionKey) => {
+    // Skip Identity check for Polygon, Finnhub, and Yahoo Finance - they use different structure
+    if (activeDataSource === 'Polygon' || activeDataSource === 'Finnhub' || activeDataSource === 'YahooFinance') {
+      return false
+    }
+    
+    if (sectionKey === 'Identity') {
+      // Check if any identity sub-section has data
+      return Object.values(identitySections).some(section => 
+        section && typeof section === 'object' && Object.keys(section).length > 0
+      )
+    }
+    
+    // Check various possible keys for each section
+    const sectionChecks = {
+      Fundamentals: () => {
+        const fundamentals = data?.Fundamentals || data?.fundamentals || currentSourceData.Fundamentals || currentSourceData.fundamentals || {}
+        return fundamentals && typeof fundamentals === 'object' && Object.keys(fundamentals).length > 0
+      },
+      Ratings: () => {
+        const ratings = currentSourceData.Ratings || currentSourceData.ratings || {}
+        return ratings && typeof ratings === 'object' && Object.keys(ratings).length > 0
+      },
+      News: () => {
+        const news = currentSourceData.News || currentSourceData.news || {}
+        return news && typeof news === 'object' && Object.keys(news).length > 0
+      },
+      Developments: () => {
+        const developments = currentSourceData.Developments || currentSourceData.Events || currentSourceData.Catalyst || 
+                            currentSourceData.developments || currentSourceData.events || currentSourceData.catalyst || {}
+        return developments && typeof developments === 'object' && Object.keys(developments).length > 0
+      },
+      StockBehaviour: () => {
+        const stockBehaviour = currentSourceData.StockBehaviour || currentSourceData['Stock Behaviour'] || 
+                              currentSourceData.stockBehaviour || currentSourceData['stock behaviour'] || {}
+        return stockBehaviour && typeof stockBehaviour === 'object' && Object.keys(stockBehaviour).length > 0
+      }
+    }
+    
+    return sectionChecks[sectionKey] ? sectionChecks[sectionKey]() : false
+  }
+
+  // Dynamically build sidebar sections based on available data
+  const buildSidebarSections = () => {
+    const sections = []
+    
+    // Special handling for Polygon.io, Finnhub, and Yahoo Finance - create buttons from JSON keys
+    if ((activeDataSource === 'Polygon' || activeDataSource === 'Finnhub' || activeDataSource === 'YahooFinance') && currentSourceData && typeof currentSourceData === 'object') {
+      // Handle both old structure (wrapped in "What") and new structure (direct keys)
+      let apiData = currentSourceData
+      
+      // If data is wrapped in "What" key (old structure), extract it
+      if (currentSourceData.What && typeof currentSourceData.What === 'object') {
+        apiData = currentSourceData.What
+      }
+      
+      // Get all top-level keys from API data, excluding wrapper keys and metadata
+      const apiKeys = Object.keys(apiData).filter(key => {
+        // Skip Identity wrapper keys
+        if (key === 'What' || key === 'Sources' || key === 'When' || key === 'Where' || key === 'How' || key === 'Who' || key === 'Why It Matters') {
+          return false
+        }
+        // Skip metadata keys
+        if (key === '_metadata' || key.startsWith('_')) {
+          return false
+        }
+        const value = apiData[key]
+        // Only include keys that have actual data (not null, not empty object)
+        return value !== null && 
+               value !== undefined && 
+               (typeof value !== 'object' || Object.keys(value).length > 0)
+      })
+      
+      // Create sections from API keys
+      apiKeys.forEach(key => {
+        sections.push({ 
+          key: key, 
+          label: key, 
+          hasSubSections: false 
+        })
+      })
+      
+      return sections
+    }
+    
+    // For other data sources (Gemini), use existing logic
+    // Always check for Identity first (if any sub-section has data)
+    if (hasSectionData('Identity')) {
+      sections.push({ key: 'Identity', label: 'Identity', hasSubSections: true })
+    }
+    
+    // Check for other sections in order
+    const sectionConfigs = [
     { key: 'Fundamentals', label: 'Fundamentals', hasSubSections: false },
     { key: 'Ratings', label: 'Ratings', hasSubSections: false },
     { key: 'News', label: 'News', hasSubSections: false },
     { key: 'Developments', label: 'Developments / Events / Catalyst', hasSubSections: false },
     { key: 'StockBehaviour', label: 'Stock Behaviour', hasSubSections: false }
   ]
+    
+    sectionConfigs.forEach(config => {
+      if (hasSectionData(config.key)) {
+        sections.push(config)
+      }
+    })
+    
+    return sections
+  }
+
+  // Main sections configuration - dynamically built from JSON data
+  const sidebarSections = buildSidebarSections()
+
+  // Set default active source if current one doesn't exist (but not for Profile tab)
+  useEffect(() => {
+    if (activeDataSource !== 'Profile' && !data?.[activeDataSource] && availableSources.length > 0) {
+      setActiveDataSource(availableSources[0])
+    }
+  }, [data, activeDataSource, availableSources])
+
+  // Reset active section when switching to Polygon, Finnhub, or Yahoo Finance data source
+  useEffect(() => {
+    if ((activeDataSource === 'Polygon' || activeDataSource === 'Finnhub' || activeDataSource === 'YahooFinance') && currentSourceData && typeof currentSourceData === 'object') {
+      // Handle both old structure (wrapped in "What") and new structure (direct keys)
+      let apiData = currentSourceData
+      
+      // If data is wrapped in "What" key (old structure), extract it
+      if (currentSourceData.What && typeof currentSourceData.What === 'object') {
+        apiData = currentSourceData.What
+      }
+      
+      const apiKeys = Object.keys(apiData).filter(key => {
+        // Skip Identity wrapper keys
+        if (key === 'What' || key === 'Sources' || key === 'When' || key === 'Where' || key === 'How' || key === 'Who' || key === 'Why It Matters') {
+          return false
+        }
+        // Skip metadata keys
+        if (key === '_metadata' || key.startsWith('_')) {
+          return false
+        }
+        const value = apiData[key]
+        return value !== null && 
+               value !== undefined && 
+               (typeof value !== 'object' || Object.keys(value).length > 0)
+      })
+      
+      // If current section is not a valid API key, set to first available
+      if (apiKeys.length > 0 && !apiKeys.includes(activeMainSection)) {
+        setActiveMainSection(apiKeys[0])
+      }
+    }
+  }, [activeDataSource, currentSourceData, activeMainSection])
+
+  // Reset active section if current section is no longer available (but not for Profile tab)
+  useEffect(() => {
+    if (activeDataSource === 'Profile') return // Skip for Profile tab
+    
+    const availableSections = buildSidebarSections()
+    const currentSectionExists = availableSections.some(s => s.key === activeMainSection)
+    
+    if (!currentSectionExists && availableSections.length > 0) {
+      // Set to first available section
+      const firstSection = availableSections[0]
+      setActiveMainSection(firstSection.key)
+      
+      // Only handle Identity sub-sections for non-Polygon/Finnhub/YahooFinance sources
+      if (activeDataSource !== 'Polygon' && activeDataSource !== 'Finnhub' && activeDataSource !== 'YahooFinance' && firstSection.key === 'Identity') {
+        // Find first available identity sub-section
+        const availableSubSections = Object.keys(identitySections).filter(key => {
+          const section = identitySections[key]
+          return section && typeof section === 'object' && Object.keys(section).length > 0
+        })
+        if (availableSubSections.length > 0) {
+          setActiveSubSection(availableSubSections[0])
+        }
+      }
+    }
+  }, [currentSourceData, activeMainSection, identitySections, activeDataSource])
+
+  // Handle Profile tab section selection
+  useEffect(() => {
+    if (activeDataSource === 'Profile') {
+      if (profileSections.length > 0) {
+        const currentSectionExists = profileSections.some(s => 
+          `${s.source}-${s.sectionKey}` === activeMainSection
+        )
+        if (!currentSectionExists) {
+          setActiveMainSection(`${profileSections[0].source}-${profileSections[0].sectionKey}`)
+        }
+      } else {
+        setActiveMainSection('')
+      }
+    }
+  }, [activeDataSource, profileSections, activeMainSection])
 
   // Get data for current section
   const getSectionData = () => {
+    // Handle Profile tab - get data from profileSections
+    if (activeDataSource === 'Profile') {
+      const selectedSection = profileSections.find(s => 
+        `${s.source}-${s.sectionKey}` === activeMainSection
+      )
+      return selectedSection ? selectedSection.data : {}
+    }
+    
+    // Special handling for Polygon.io, Finnhub, and Yahoo Finance - return data directly from the key
+    if ((activeDataSource === 'Polygon' || activeDataSource === 'Finnhub' || activeDataSource === 'YahooFinance') && currentSourceData) {
+      // Handle both old structure (wrapped in "What") and new structure (direct keys)
+      let apiData = currentSourceData
+      
+      // If data is wrapped in "What" key (old structure), extract it
+      if (currentSourceData.What && typeof currentSourceData.What === 'object') {
+        apiData = currentSourceData.What
+      }
+      
+      return apiData[activeMainSection] || {}
+    }
+    
+    // For other sources, handle Identity sub-sections
     if (activeMainSection === 'Identity') {
       return identitySections[activeSubSection] || {}
     }
@@ -83,6 +496,19 @@ function CompanyProfile({ data, ticker, onDataUpdate }) {
   }
 
   const getSectionTitle = () => {
+    // Handle Profile tab
+    if (activeDataSource === 'Profile') {
+      const selectedSection = profileSections.find(s => 
+        `${s.source}-${s.sectionKey}` === activeMainSection
+      )
+      return selectedSection ? selectedSection.label : 'Select a section'
+    }
+    
+    // For Polygon.io, Finnhub, and Yahoo Finance, use the section key directly as the title
+    if (activeDataSource === 'Polygon' || activeDataSource === 'Finnhub' || activeDataSource === 'YahooFinance') {
+      return activeMainSection
+    }
+    
     if (activeMainSection === 'Identity') {
       return activeSubSection
     }
@@ -183,29 +609,22 @@ function CompanyProfile({ data, ticker, onDataUpdate }) {
 
     setYfinanceLoading(true)
     setYfinanceError(null)
-    setYfinanceStatus('Fetching from Yahoo Finance (Direct)...')
+    setYfinanceStatus('Fetching from Yahoo Finance...')
 
     try {
-      setYfinanceStatus('Fetching company profile data directly from Yahoo Finance...')
+      setYfinanceStatus('Fetching company profile data from Yahoo Finance...')
       
-      // Use direct frontend fetch instead of backend API
-      const result = await fetchYahooFinanceDirect(ticker.toUpperCase())
+      // Use backend API (similar to Polygon and Finnhub)
+      const result = await fetchProfileFromYFinance(ticker.toUpperCase(), true)
       
       setYfinanceStatus('Profile fetched successfully from Yahoo Finance!')
       
       // Save Yahoo Finance data separately under "YahooFinance" key
       if (onDataUpdate && result.data) {
-        console.log('🔍 [COMPONENT] Result data:', result.data)
-        console.log('🔍 [COMPONENT] Result data.What:', result.data.What)
-        console.log('🔍 [COMPONENT] Result data.What keys:', Object.keys(result.data.What || {}))
-        
         const updatedData = {
           ...data,
           YahooFinance: result.data  // Save separately by source
         }
-        
-        console.log('🔍 [COMPONENT] Updated data.YahooFinance:', updatedData.YahooFinance)
-        console.log('🔍 [COMPONENT] Updated data.YahooFinance.What:', updatedData.YahooFinance?.What)
         
         onDataUpdate(updatedData)
         // Switch to Yahoo Finance source after fetching
@@ -317,6 +736,9 @@ function CompanyProfile({ data, ticker, onDataUpdate }) {
       }
     }
 
+  // Check if this is a completely new/empty profile
+  const isNewProfile = !data || Object.keys(data).length === 0
+
   return (
     <div className="mt-8 border border-black bg-white">
       <div className="border-b border-black px-6 py-4">
@@ -327,9 +749,36 @@ function CompanyProfile({ data, ticker, onDataUpdate }) {
         </div>
       </div>
 
+      {/* Welcome message for new profiles */}
+      {isNewProfile && (
+        <div className="border-b border-black bg-black/5 px-6 py-4">
+          <div className="max-w-3xl">
+            <p className="text-base font-medium text-black mb-2">
+              Welcome! This is a new profile for <strong>{ticker}</strong>.
+            </p>
+            <p className="text-sm text-black/70 mb-3">
+              Get started by fetching data from any of the sources below. You can fetch from multiple sources and they'll all be saved to this profile.
+            </p>
+            <div className="flex flex-wrap gap-2 text-xs text-black/60">
+              <span>💡 <strong>Tip:</strong> Start with Yahoo Finance (fastest) or Polygon.io for quick data</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Data Sources Tab Bar */}
       <div className="border-b border-black bg-white">
         <div className="flex">
+          <button
+            className={`px-6 py-3 text-sm font-medium transition-colors border-r border-black ${
+              activeDataSource === 'Profile'
+                ? 'bg-black text-white'
+                : 'bg-white text-black hover:bg-black/5'
+            }`}
+            onClick={() => setActiveDataSource('Profile')}
+          >
+            Profile
+          </button>
           <button
             className={`px-6 py-3 text-sm font-medium transition-colors border-r border-black ${
               activeDataSource === 'Gemini'
@@ -406,7 +855,7 @@ function CompanyProfile({ data, ticker, onDataUpdate }) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-black">Yahoo Finance</p>
-                <p className="text-xs text-black/70">Direct Frontend (1-3 seconds)</p>
+                <p className="text-xs text-black/70">Backend API (3-8 seconds)</p>
               </div>
               <button
                 className="px-4 py-2 bg-black text-white text-xs font-medium hover:bg-black/90 transition-colors disabled:bg-black/50 disabled:cursor-not-allowed"
@@ -474,7 +923,53 @@ function CompanyProfile({ data, ticker, onDataUpdate }) {
         {/* Left Sidebar */}
         <div className="w-72 border-r border-black bg-white flex-shrink-0">
           <nav className="py-4">
-            {sidebarSections.map((section) => (
+            {/* Profile Tab Sidebar */}
+            {activeDataSource === 'Profile' ? (
+              <>
+                <div className="px-6 py-3 border-b border-black">
+                  <button
+                    className="w-full px-4 py-2 bg-black text-white text-sm font-medium hover:bg-black/90 transition-colors"
+                    onClick={() => setShowAddSectionModal(true)}
+                  >
+                    + Add Section
+                  </button>
+                </div>
+                {profileSections.length === 0 ? (
+                  <div className="px-6 py-4 text-sm text-black/70">
+                    No sections added. Click "Add Section" to add sections from any data source.
+                  </div>
+                ) : (
+                  profileSections.map((section, index) => (
+                    <div key={`${section.source}-${section.sectionKey}-${index}`}>
+                      <div className="flex items-center justify-between border-b border-black">
+                        <button
+                          className={`flex-1 text-left px-6 py-3 text-sm font-medium transition-colors ${
+                            activeMainSection === `${section.source}-${section.sectionKey}`
+                              ? 'bg-black text-white'
+                              : 'bg-white text-black hover:bg-black/5'
+                          }`}
+                          onClick={() => setActiveMainSection(`${section.source}-${section.sectionKey}`)}
+                        >
+                          {section.label}
+                        </button>
+                        <button
+                          className="px-3 py-3 text-red-600 hover:bg-red-50 transition-colors"
+                          onClick={() => handleRemoveSection(index)}
+                          title="Remove section"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </>
+            ) : sidebarSections.length === 0 ? (
+              <div className="px-6 py-4 text-sm text-black/70">
+                No sections available. Fetch data from a source above.
+              </div>
+            ) : (
+              sidebarSections.map((section) => (
               <div key={section.key}>
                 <button
                   className={`w-full text-left px-6 py-3 text-sm font-medium transition-colors border-b border-black ${
@@ -484,18 +979,32 @@ function CompanyProfile({ data, ticker, onDataUpdate }) {
                   }`}
                   onClick={() => {
                     setActiveMainSection(section.key)
-                    if (section.key === 'Identity') {
-                      setActiveSubSection('What')
+                    // Only handle Identity sub-sections for non-Polygon/Finnhub/YahooFinance sources
+                    if (activeDataSource !== 'Polygon' && activeDataSource !== 'Finnhub' && activeDataSource !== 'YahooFinance' && section.key === 'Identity') {
+                      // Find first available identity sub-section
+                      const availableSubSections = Object.keys(identitySections).filter(key => {
+                        const sectionData = identitySections[key]
+                        return sectionData && typeof sectionData === 'object' && Object.keys(sectionData).length > 0
+                      })
+                      if (availableSubSections.length > 0) {
+                        setActiveSubSection(availableSubSections[0])
+                      }
                     }
                   }}
                 >
                   {section.label}
                 </button>
 
-                {/* Sub-sections for Identity */}
-                {activeMainSection === 'Identity' && section.key === 'Identity' && (
+                {/* Sub-sections for Identity (only for non-Polygon/Finnhub/YahooFinance sources) */}
+                {activeDataSource !== 'Polygon' && activeDataSource !== 'Finnhub' && activeDataSource !== 'YahooFinance' && activeMainSection === 'Identity' && section.key === 'Identity' && (
                   <div className="bg-black/5 border-b border-black">
-                    {Object.keys(identitySections).map((subSection) => (
+                    {Object.keys(identitySections)
+                      .filter(subSection => {
+                        // Only show sub-sections that have data
+                        const sectionData = identitySections[subSection]
+                        return sectionData && typeof sectionData === 'object' && Object.keys(sectionData).length > 0
+                      })
+                      .map((subSection) => (
                       <button
                         key={subSection}
                         className={`w-full text-left px-10 py-2.5 text-xs font-medium transition-colors border-b border-black/20 last:border-b-0 ${
@@ -511,28 +1020,69 @@ function CompanyProfile({ data, ticker, onDataUpdate }) {
                   </div>
                 )}
               </div>
-            ))}
+            ))
+            )}
           </nav>
         </div>
 
         {/* Main Content Area */}
         <div className="flex-1 overflow-auto">
           <div className="p-8">
-            {/* Data Source Indicator */}
-            {!currentSourceData || Object.keys(currentSourceData).length === 0 ? (
-              <div className="mb-6 border border-black bg-black/5 p-4">
-                <p className="text-sm text-black">
-                    No data available from {activeDataSource === 'Gemini' ? 'Gemini AI' : activeDataSource === 'YahooFinance' ? 'Yahoo Finance' : activeDataSource === 'Polygon' ? 'Polygon.io' : 'Finnhub'}.
-                  Click "Fetch" above to load data from this source.
-                </p>
-              </div>
+            {/* Profile Tab Content */}
+            {activeDataSource === 'Profile' ? (
+              <>
+                {profileSections.length === 0 ? (
+                  <div className="mb-6 border border-black bg-black/5 p-8 text-center">
+                    <p className="text-lg font-medium text-black mb-2">No sections added yet</p>
+                    <p className="text-sm text-black/70 mb-4">
+                      Click "Add Section" in the sidebar to add sections from any data source.
+                    </p>
+                    <button
+                      className="px-6 py-2 bg-black text-white text-sm font-medium hover:bg-black/90 transition-colors"
+                      onClick={() => setShowAddSectionModal(true)}
+                    >
+                      Add Your First Section
+                    </button>
+                  </div>
+                ) : !activeMainSection || !profileSections.find(s => `${s.source}-${s.sectionKey}` === activeMainSection) ? (
+                  <div className="mb-6 border border-black bg-black/5 p-4">
+                    <p className="text-sm text-black">
+                      Select a section from the sidebar to view its data.
+                    </p>
+                  </div>
+                ) : (
+                  <SectionCard 
+                    title={getSectionTitle()} 
+                    data={getSectionData()} 
+                  />
+                )}
+              </>
             ) : (
-              <div className="mb-4 text-xs text-black/70">
-                    Viewing data from: <span className="font-medium">
-                      {activeDataSource === 'Gemini' ? 'Gemini AI' : activeDataSource === 'YahooFinance' ? 'Yahoo Finance' : activeDataSource === 'Polygon' ? 'Polygon.io' : 'Finnhub'}
-                    </span>
-              </div>
-            )}
+              <>
+                {/* Data Source Indicator */}
+                {!currentSourceData || Object.keys(currentSourceData).length === 0 ? (
+                  <div className="mb-6 border border-black bg-black/5 p-6">
+                    <div className="text-center">
+                      <p className="text-base font-medium text-black mb-2">
+                        No data available from {activeDataSource === 'Gemini' ? 'Gemini AI' : activeDataSource === 'YahooFinance' ? 'Yahoo Finance' : activeDataSource === 'Polygon' ? 'Polygon.io' : 'Finnhub'}
+                      </p>
+                      <p className="text-sm text-black/70 mb-4">
+                        Click the <strong>"Fetch"</strong> button above to load data from this source.
+                      </p>
+                      {activeDataSource === 'Gemini' && (
+                        <p className="text-xs text-black/50">
+                          Note: Gemini AI fetch takes 30-60 seconds and will open a browser window.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mb-4 text-xs text-black/70">
+                        Viewing data from: <span className="font-medium">
+                          {activeDataSource === 'Gemini' ? 'Gemini AI' : activeDataSource === 'YahooFinance' ? 'Yahoo Finance' : activeDataSource === 'Polygon' ? 'Polygon.io' : 'Finnhub'}
+                        </span>
+                  </div>
+                )}
 
             {/* Fundamentals Section with Fetch Button */}
             {activeMainSection === 'Fundamentals' && (
@@ -578,13 +1128,74 @@ function CompanyProfile({ data, ticker, onDataUpdate }) {
               </div>
             )}
             
-            <SectionCard 
-              title={getSectionTitle()} 
-              data={getSectionData()} 
-            />
+                <SectionCard 
+                  title={getSectionTitle()} 
+                  data={getSectionData()} 
+                />
+              </>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Add Section Modal */}
+      {showAddSectionModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowAddSectionModal(false)}>
+          <div className="bg-white border-2 border-black max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="border-b-2 border-black px-6 py-4 flex items-center justify-between">
+              <h3 className="text-xl font-bold text-black">Add Section</h3>
+              <button
+                className="text-2xl text-black hover:text-black/70 transition-colors"
+                onClick={() => setShowAddSectionModal(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-6">
+              {getAllAvailableSections().length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-black/70 mb-4">No sections available from any data source.</p>
+                  <p className="text-sm text-black/50">Please fetch data from at least one source first.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {getAllAvailableSections().map((section, index) => {
+                    const isAdded = profileSections.some(s => 
+                      s.source === section.source && s.sectionKey === section.sectionKey
+                    )
+                    return (
+                      <div
+                        key={index}
+                        className={`border border-black p-4 flex items-center justify-between ${
+                          isAdded ? 'bg-black/5 opacity-60' : 'bg-white hover:bg-black/5'
+                        }`}
+                      >
+                        <div className="flex-1">
+                          <p className="font-medium text-black">{section.label}</p>
+                          <p className="text-xs text-black/50 mt-1">
+                            Source: {section.source === 'YahooFinance' ? 'Yahoo Finance' : section.source}
+                          </p>
+                        </div>
+                        <button
+                          className={`px-4 py-2 text-sm font-medium transition-colors ${
+                            isAdded
+                              ? 'bg-black/20 text-black/50 cursor-not-allowed'
+                              : 'bg-black text-white hover:bg-black/90'
+                          }`}
+                          onClick={() => !isAdded && handleAddSection(section)}
+                          disabled={isAdded}
+                        >
+                          {isAdded ? 'Added' : 'Add'}
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

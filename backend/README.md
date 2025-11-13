@@ -67,7 +67,22 @@ cd backend
 pip install -r requirements.txt
 ```
 
-### 3. Configure Environment
+### 3. Install Playwright Browsers
+
+After installing Python dependencies, you need to install Playwright browser binaries:
+
+```bash
+playwright install
+```
+
+This will download Chromium, Firefox, and WebKit browsers required for browser automation (used by Gemini AI scraping).
+
+**Note:** This step is required! Without it, you'll get an error like:
+```
+Executable doesn't exist at ...\ms-playwright\chromium-1140\chrome-win\chrome.exe
+```
+
+### 4. Configure Environment
 
 ```bash
 # Copy example env file
@@ -88,7 +103,7 @@ MONGODB_URL=mongodb+srv://username:password@cluster.mongodb.net/dbname?retryWrit
 DATABASE_NAME=company_profiles_db
 ```
 
-### 4. Initialize Database (Optional)
+### 5. Initialize Database (Optional)
 
 ```bash
 python init_db.py
@@ -96,7 +111,7 @@ python init_db.py
 
 The database will be automatically initialized when you start the server.
 
-### 5. Run the Server
+### 6. Run the Server
 
 ```bash
 # Development mode
@@ -135,6 +150,103 @@ The API will be available at:
 
 - `GET /` - Root endpoint
 - `GET /health` - Health check
+
+## How to Create Profiles for New Tickers
+
+There are **3 ways** to create profiles for new tickers:
+
+### Method 1: Through the Web UI (Recommended)
+
+This is the easiest way to create profiles:
+
+1. **Open the application** in your browser
+2. **Click on "Company Profile" tab** (not Browse)
+3. **Enter a ticker symbol** (e.g., `AAPL`, `TSLA`, `MSFT`, `NVDA`)
+4. **Click "Load Profile"** - If profile doesn't exist, you'll see an empty profile
+5. **Fetch data from any source:**
+   - Click **"Fetch"** button under **Gemini AI** (takes 30-60 seconds, opens browser)
+   - Click **"Fetch"** button under **Yahoo Finance** (fast, 3-8 seconds)
+   - Click **"Fetch"** button under **Polygon.io** (fast, 2-5 seconds)
+   - Click **"Fetch"** button under **Finnhub** (fast, 3-8 seconds)
+6. **Profile is automatically saved** to the database when you fetch data
+
+**Note:** You can fetch from multiple sources and they'll all be saved under the same ticker. Use the tabs (Profile, Gemini AI, Yahoo Finance, etc.) to switch between different data sources.
+
+### Method 2: Using API Endpoints
+
+#### Option A: Fetch from Gemini AI (via API)
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/gemini/fetch-profile" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ticker": "AAPL",
+    "save_to_db": true
+  }'
+```
+
+#### Option B: Fetch from Yahoo Finance (via API)
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/yfinance/fetch-data" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ticker": "AAPL",
+    "save_to_db": true
+  }'
+```
+
+#### Option C: Fetch from Polygon.io (via API)
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/polygon/fetch-profile" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ticker": "AAPL",
+    "save_to_db": true
+  }'
+```
+
+#### Option D: Fetch from Finnhub (via API)
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/finnhub/fetch-data" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ticker": "AAPL",
+    "save_to_db": true
+  }'
+```
+
+#### Option E: Create Profile Manually (via API)
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/profiles/" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ticker": "AAPL",
+    "data": {
+      "What": {
+        "CompanyName": "Apple Inc.",
+        "Ticker": "AAPL"
+      },
+      "When": {
+        "Founded": "1976"
+      }
+    }
+  }'
+```
+
+### Method 3: Upload JSON File
+
+If you have a JSON file with company profile data:
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/profiles/upload" \
+  -F "file=@gemini_company_profile_AAPL.json"
+```
+
+The JSON file should have the ticker in the filename or in the data structure.
 
 ## Example Usage
 

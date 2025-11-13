@@ -96,8 +96,12 @@ function App() {
       setCurrentTicker(profile.ticker)
       setError(null)
     } catch (err) {
-      setError(err.message || 'Profile not found')
-      setCompanyData(null)
+      // If profile doesn't exist, create an empty profile structure
+      // This allows users to fetch data from various sources
+      const tickerUpper = profileTicker.toUpperCase()
+      setCompanyData({}) // Empty data object
+      setCurrentTicker(tickerUpper)
+      setError(null) // Don't show error, show empty profile instead
     } finally {
       setLoading(false)
     }

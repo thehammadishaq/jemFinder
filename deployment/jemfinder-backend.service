@@ -1,0 +1,28 @@
+[Unit]
+Description=JemFinder FastAPI Backend
+After=network.target mongodb.service
+Requires=mongodb.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/jemfinder/backend
+Environment="PATH=/var/www/jemfinder/backend/venv/bin"
+EnvironmentFile=/var/www/jemfinder/backend/.env
+ExecStart=/var/www/jemfinder/backend/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 4
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/www/jemfinder/backend
+
+[Install]
+WantedBy=multi-user.target
+

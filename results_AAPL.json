@@ -1,20 +1,50 @@
 {
-    "Overview": {
-        "Information": "We have detected your API key as WLY6QF7M4V6SRI4P and our standard API rate limit is 25 requests per day. Please subscribe to any of the premium plans at https://www.alphavantage.co/premium/ to instantly remove all daily rate limits."
+    "Company Profile": null,
+    "Fast Info": {
+        "currency": null,
+        "dayHigh": null,
+        "dayLow": null,
+        "exchange": null,
+        "fiftyDayAverage": null,
+        "lastPrice": null,
+        "lastVolume": null,
+        "marketCap": null,
+        "open": null,
+        "previousClose": null,
+        "quoteType": null,
+        "regularMarketPreviousClose": null,
+        "shares": null,
+        "tenDayAverageVolume": null,
+        "threeMonthAverageVolume": null,
+        "timezone": null,
+        "twoHundredDayAverage": null,
+        "yearChange": null,
+        "yearHigh": NaN,
+        "yearLow": NaN
     },
-    "Global Quote": {
-        "Information": "We have detected your API key as WLY6QF7M4V6SRI4P and our standard API rate limit is 25 requests per day. Please subscribe to any of the premium plans at https://www.alphavantage.co/premium/ to instantly remove all daily rate limits."
-    },
-    "Dividends": {
-        "Information": "We have detected your API key as WLY6QF7M4V6SRI4P and our standard API rate limit is 25 requests per day. Please subscribe to any of the premium plans at https://www.alphavantage.co/premium/ to instantly remove all daily rate limits."
-    },
-    "Splits": {
-        "Information": "We have detected your API key as WLY6QF7M4V6SRI4P and our standard API rate limit is 25 requests per day. Please subscribe to any of the premium plans at https://www.alphavantage.co/premium/ to instantly remove all daily rate limits."
-    },
-    "Income Statement": {
-        "Information": "We have detected your API key as WLY6QF7M4V6SRI4P and our standard API rate limit is 25 requests per day. Please subscribe to any of the premium plans at https://www.alphavantage.co/premium/ to instantly remove all daily rate limits."
-    },
-    "Balance Sheet": {
-        "Information": "We have detected your API key as WLY6QF7M4V6SRI4P and our standard API rate limit is 25 requests per day. Please subscribe to any of the premium plans at https://www.alphavantage.co/premium/ to instantly remove all daily rate limits."
-    }
+    "Historical Prices": null,
+    "Income Statement Annual": null,
+    "Income Statement Quarterly": null,
+    "Income Statement Annual (New)": null,
+    "Income Statement Quarterly (New)": null,
+    "Balance Sheet Annual": null,
+    "Balance Sheet Quarterly": null,
+    "Cash Flow Annual": null,
+    "Cash Flow Quarterly": null,
+    "Analyst Recommendations": null,
+    "Recommendations Summary": null,
+    "Analyst Price Target": null,
+    "Earnings Annual": null,
+    "Earnings Quarterly": null,
+    "Earnings Calendar": null,
+    "Dividends": null,
+    "Splits": null,
+    "Shares Outstanding": null,
+    "Major Holders": null,
+    "Institutional Holders": null,
+    "Insider Transactions": null,
+    "Insider Purchases": null,
+    "Insider Roster Holders": null,
+    "Sustainability": null,
+    "News": null
 }

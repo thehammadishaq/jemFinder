@@ -31,7 +31,7 @@ def safe_get(url: str, params: Optional[Dict] = None) -> Optional[Dict]:
 async def get_company_profile_from_polygon(symbol: str) -> Optional[Dict]:
     """
     Fetch ALL data from Polygon.io (complete data like polygonFundamentals.py)
-    Put ALL complete data in "What" section for Identity tab
+    Returns data directly with API response keys (Ticker Details, Company Info, etc.)
     """
     if not POLYGON_API_KEY:
         debug("⚠️ POLYGON_API_KEY not found in settings or .env file")
@@ -150,25 +150,7 @@ async def get_company_profile_from_polygon(symbol: str) -> Optional[Dict]:
     if prev_close and not isinstance(prev_close, Exception):
         all_data["Previous Close"] = prev_close
     
-    # Build profile - put ALL complete Polygon data in "What" section
-    profile = {}
-    
-    # ========== WHAT: ALL COMPLETE POLYGON DATA ==========
-    # Put all complete data from Polygon in "What" section
-    profile["What"] = all_data  # Complete Polygon data structure
-    
-    # Keep other sections minimal or empty for Polygon
-    profile["When"] = {}
-    profile["Where"] = {}
-    profile["How"] = {}
-    profile["Who"] = {}
-    profile["Why It Matters"] = {}
-    profile["Sources"] = {
-        "Polygon.io": {
-            "Complete Data": True,
-            "Data Sections": list(all_data.keys()),
-        }
-    }
-    
-    return profile
+    # Return data directly without wrapping in "What" and "Sources"
+    # This allows the frontend to create dynamic buttons from the actual API response keys
+    return all_data if all_data else None
 

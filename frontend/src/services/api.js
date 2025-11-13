@@ -195,7 +195,7 @@ export const fetchFundamentalsFromGeminiGet = async (ticker, saveToDb = true) =>
  * Fetch company profile from Yahoo Finance
  */
 export const fetchProfileFromYFinance = async (ticker, saveToDb = true) => {
-  const response = await fetch(`${API_BASE_URL}/yfinance/fetch-profile`, {
+  const response = await fetch(`${API_BASE_URL}/yfinance/fetch-data`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -219,7 +219,7 @@ export const fetchProfileFromYFinance = async (ticker, saveToDb = true) => {
  */
 export const fetchProfileFromYFinanceGet = async (ticker, saveToDb = true) => {
   const response = await fetch(
-    `${API_BASE_URL}/yfinance/fetch-profile/${ticker.toUpperCase()}?save_to_db=${saveToDb}`
+    `${API_BASE_URL}/yfinance/fetch-data/${ticker.toUpperCase()}?save_to_db=${saveToDb}`
   )
 
   if (!response.ok) {
