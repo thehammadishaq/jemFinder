@@ -346,7 +346,24 @@ function CompanyProfile({ data, ticker, onDataUpdate }) {
       return sections
     }
     
-    // For other data sources (Gemini), use existing logic
+    // For Gemini data source, check for What/When/Where/How/Who structure
+    if (activeDataSource === 'Gemini' && currentSourceData && typeof currentSourceData === 'object') {
+      const geminiSections = ['What', 'When', 'Where', 'How', 'Who', 'Sources']
+      geminiSections.forEach(sectionKey => {
+        if (currentSourceData[sectionKey] && 
+            typeof currentSourceData[sectionKey] === 'object' && 
+            Object.keys(currentSourceData[sectionKey]).length > 0) {
+          sections.push({ 
+            key: sectionKey, 
+            label: sectionKey, 
+            hasSubSections: false 
+          })
+        }
+      })
+      return sections
+    }
+    
+    // For other data sources, use existing logic
     // Always check for Identity first (if any sub-section has data)
     if (hasSectionData('Identity')) {
       sections.push({ key: 'Identity', label: 'Identity', hasSubSections: true })
@@ -463,6 +480,15 @@ function CompanyProfile({ data, ticker, onDataUpdate }) {
         `${s.source}-${s.sectionKey}` === activeMainSection
       )
       return selectedSection ? selectedSection.data : {}
+    }
+    
+    // Special handling for Gemini - return data directly from What/When/Where/How/Who/Sources keys
+    if (activeDataSource === 'Gemini' && currentSourceData) {
+      if (currentSourceData[activeMainSection] && 
+          typeof currentSourceData[activeMainSection] === 'object') {
+        return currentSourceData[activeMainSection] || {}
+      }
+      return {}
     }
     
     // Special handling for Polygon.io, Finnhub, and Yahoo Finance - return data directly from the key

@@ -907,8 +907,10 @@ Return ONLY valid JSON with the following structure (no markdown, no code blocks
     "Industry": "industry name",
     "Niche": "niche or business focus",
     "Description": "detailed description of what the company does",
-    "Products": "main products, services, or offerings",
-    "MarketPosition": "business category and market position"
+    "Products": "main products, services, or offerings (consolidated list)",
+    "MarketPosition": "business category and market position",
+    "Monetization": "how the company makes money (describe before revenue streams)",
+    "RevenueStreams": "list of primary revenue streams with percentages or qualitative sizing"
   }},
   "When": {{
     "FoundedYear": "founded year",
@@ -916,7 +918,19 @@ Return ONLY valid JSON with the following structure (no markdown, no code blocks
     "IPODate": "IPO date if publicly traded",
     "KeyMilestones": "key milestones and growth timeline",
     "Acquisitions": "major acquisitions or expansions",
-    "RecentEvents": "recent significant events"
+    "InvestmentTimeline": "chronological timeline of funding rounds, major investors, and amounts",
+    "RecentEvents": [
+      "Bullet 1 - most recent dated event",
+      "Bullet 2 - next most recent event",
+      "Bullet 3",
+      "Bullet 4",
+      "Bullet 5",
+      "Bullet 6",
+      "Bullet 7",
+      "Bullet 8",
+      "Bullet 9",
+      "Bullet 10 - oldest of the recent set"
+    ]
   }},
   "Where": {{
     "Headquarters": "full headquarters address",
@@ -929,16 +943,15 @@ Return ONLY valid JSON with the following structure (no markdown, no code blocks
   }},
   "How": {{
     "BusinessModel": "business model and how the company operates",
-    "RevenueStreams": "revenue streams and monetization strategy",
-    "Products": "key products or services offered",
-    "Monetization": "how the company makes money",
+    "MarketStrategy": "go-to-market and customer acquisition strategy",
     "CompetitiveAdvantages": "competitive advantages or unique selling points",
-    "MarketStrategy": "market strategy"
+    "OperationalHighlights": "key operational details, capacity, supply chain, or execution notes"
   }},
   "Who": {{
     "CEO": "current CEO name and title",
     "LeadershipTeam": "key leadership team members",
     "Founders": "founder(s) name(s) and background",
+    "Investors": "complete list of major institutional and strategic investors with ownership info",
     "InstitutionalOwnership": "institutional ownership percentage if available",
     "MajorShareholders": "major shareholders or stakeholders",
     "BoardOfDirectors": "board of directors if available"
@@ -949,7 +962,8 @@ Return ONLY valid JSON with the following structure (no markdown, no code blocks
   }}
 }}
 
-Provide factual, detailed, and comprehensive information about {ticker}. Return ONLY the JSON object, nothing else."""
+Provide factual, detailed, and comprehensive information about {ticker}. For the "RecentEvents" array, include exactly 10 bullet-style strings (most recent first), each summarizing a distinct recent development with dates if available. Return ONLY the JSON object, nothing else."""
+
 
         print(f"💬 Sending company profile query for {ticker}...")
         input_box = None
